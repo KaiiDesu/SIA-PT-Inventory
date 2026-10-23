@@ -1,6 +1,6 @@
 <?php
 /** @var array $pages @var string $page */
-$alerts = count($inventory->lowStock());
+$alerts = count(array_filter($inventory->lowStock(), fn ($r) => $r['sellable']));
 ?>
 <!doctype html>
 <html lang="en">
@@ -23,7 +23,7 @@ $alerts = count($inventory->lowStock());
         <?php foreach ($pages as $key => [$title, $icon, $group]): if ($group !== 'inventory') continue; ?>
             <a href="?page=<?= $key ?>" class="nav-link<?= $key === $page ? ' active' : '' ?>">
                 <?= icon($icon) ?><span><?= h($title) ?></span>
-                <?php if ($key === 'inventory' && $alerts): ?><em class="nav-count" title="Low or out of stock"><?= $alerts ?></em><?php endif; ?>
+                <?php if ($key === 'inventory' && $alerts): ?><em class="nav-count" title="<?= plural($alerts, 'item') ?> need restocking"><?= $alerts ?></em><?php endif; ?>
             </a>
         <?php endforeach; ?>
     </nav>
@@ -35,7 +35,7 @@ $alerts = count($inventory->lowStock());
         <?php endforeach; ?>
     </nav>
 
-    <div class="sidebar-help"><?= icon('check') ?><p>One shelf per listing.<br>Every unit accounted for.</p></div>
+    <div class="sidebar-help"><?= icon('alert') ?><p><b>Available to sell</b> =<br>In warehouse − Reserved for orders</p></div>
     <div class="sidebar-foot">
         <div class="account">
             <span class="avatar">IM</span>
@@ -75,5 +75,7 @@ $alerts = count($inventory->lowStock());
         <span>Universidad de Manila · College of Computing Studies</span>
     </footer>
 </div>
+<?php require __DIR__ . '/partials/add_stock_dialog.php'; ?>
+<script src="assets/app.js"></script>
 </body>
 </html>

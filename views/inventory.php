@@ -2,154 +2,157 @@
 $id = int_in($_GET, 'id');
 
 if ($id && ($shelf = $inventory->find($id))):
-    $back   = "?page=inventory&id=$id";
     $recent = $inventory->movements(['inventory_id' => $id]);
     $rows   = $inventory->reservations(['inventory_id' => $id]);
-    $blocked = array_filter([
+    $hideItem = true;
+    $why    = array_filter([
         $shelf['seller_status']  !== 'active' ? 'the seller is inactive'      : null,
         $shelf['product_status'] !== 'active' ? 'the product is discontinued' : null,
-        $shelf['offer_status']   !== 'active' ? 'the offer is inactive'       : null,
+        $shelf['offer_status']   !== 'active' ? 'the listing is switched off' : null,
     ]);
     $hidden = fn (string $action) => csrf_field()
-        . '<input type="hidden" name="action" value="' . $action . '"><input type="hidden" name="inventory_id" value="' . $id . '">'
-        . '<input type="hidden" name="back" value="' . h($back) . '">';
+        . '<input type="hidden" name="action" value="' . $action . '"><input type="hidden" name="inventory_id" value="' . $id . '">';
 ?>
-<a class="crumb" href="?page=inventory"><?= icon('back') ?>Back to stock records</a>
-<?= page_head('Stock record #' . $id, $shelf['product_name'],
-    $shelf['seller_name'] . ' · Offer #' . $shelf['offer_id'] . ' · ' . $shelf['category_name'] . ' · ' . peso($shelf['selling_price']),
-    badge($shelf['stock_status'])) ?>
+<a class="crumb" href="?page=inventory"><?= icon('back') ?>All stock</a>
+<?= page_head('', $shelf['product_name'],
+    $shelf['seller_name'] . ' · ' . $shelf['category_name'] . ' · ' . peso($shelf['selling_price']) . ' each',
+    badge(stock_state($shelf))) ?>
 
-<?php if ($blocked): ?>
-    <div class="notice-bar info"><?= icon('alert') ?><div>New reservations are blocked because <?= implode(' and ', $blocked) ?> in the Catalogue. Existing holds can still ship.</div></div>
+<?php if ($why): ?>
+    <div class="notice-bar info"><?= icon('alert') ?><div>Customers can't order this right now because <?= implode(' and ', $why) ?>. Orders already placed can still ship.</div></div>
 <?php endif; ?>
 
-<section class="stats">
-    <div class="stat"><small>On hand</small><strong><?= qty($shelf['quantity_on_hand']) ?></strong><span class="sub">Physically with the seller</span><span class="stat-icon"><?= icon('box') ?></span></div>
-    <div class="stat"><small>Reserved</small><strong><?= qty($shelf['quantity_reserved']) ?></strong><span class="sub">Promised to unshipped orders</span><span class="stat-icon"><?= icon('clock') ?></span></div>
-    <div class="stat feature"><small>Available</small><strong><?= qty($shelf['quantity_available']) ?></strong><span class="sub">On hand − reserved</span><span class="stat-icon"><?= icon('check') ?></span></div>
-    <div class="stat"><small>Reorder level</small><strong><?= qty($shelf['reorder_level']) ?></strong><span class="sub">Updated <?= when($shelf['updated_at']) ?></span><span class="stat-icon"><?= icon('alert') ?></span></div>
+<section class="equation">
+    <div class="term"><small>In warehouse</small><strong><?= qty($shelf['quantity_on_hand']) ?></strong><span>on the shelves</span></div>
+    <div class="op">−</div>
+    <div class="term"><small>Reserved for orders</small><strong><?= qty($shelf['quantity_reserved']) ?></strong><span>waiting to ship</span></div>
+    <div class="op">=</div>
+    <div class="term result"><small>Available to sell</small><strong><?= qty($shelf['quantity_available']) ?></strong><?= level_bar($shelf) ?></div>
+    <form class="term restock-point" method="post">
+        <?= $hidden('set_reorder') ?>
+        <small>Warn me when available drops to</small>
+        <div class="inline-input"><input type="number" name="reorder_level" min="0" value="<?= $shelf['reorder_level'] ?>" required aria-label="Restock point"><button class="btn btn-sm btn-ghost">Save</button></div>
+    </form>
 </section>
-<p class="scope-note">On hand changes only through a recorded movement below.</p>
 
-<div class="grid-3">
+<div class="grid-2">
     <form class="panel" method="post">
-        <div class="panel-head"><h2>Restock</h2></div>
+        <div class="panel-head"><div><h2>Add stock</h2><p>A delivery arrived from the supplier.</p></div></div>
         <div class="panel-body">
             <?= $hidden('restock') ?>
-            <label>Units received<input type="number" name="quantity" min="1" required></label>
-            <label><span>Remarks <i>optional</i></span><input name="remarks" maxlength="255" placeholder="e.g. Supplier delivery DR-1042"></label>
-            <button class="btn"><?= icon('plus') ?>Add stock</button>
+            <label>How many units arrived?<input type="number" name="quantity" min="1" required inputmode="numeric"></label>
+            <label><span>Note <i>optional</i></span><input name="remarks" maxlength="255" placeholder="e.g. Delivery receipt DR-1042"></label>
+            <button class="btn"><?= icon('plus') ?>Add to stock</button>
         </div>
     </form>
 
     <form class="panel" method="post">
-        <div class="panel-head"><h2>Adjust count</h2></div>
+        <div class="panel-head"><div><h2>Fix the count</h2><p>The shelf doesn't match the number above.</p></div></div>
         <div class="panel-body">
             <?= $hidden('adjust') ?>
-            <div class="row">
-                <label>Direction<select name="direction"><option value="out">Remove (−)</option><option value="in">Add (+)</option></select></label>
-                <label>Units<input type="number" name="quantity" min="1" required></label>
+            <div class="choice">
+                <label><input type="radio" name="direction" value="out" checked><span><b>Fewer than recorded</b><small>Damaged, lost or missing</small></span></label>
+                <label><input type="radio" name="direction" value="in"><span><b>More than recorded</b><small>Found extra units</small></span></label>
             </div>
-            <label><span>Reason <i>required</i></span><input name="remarks" maxlength="255" required placeholder="Damaged, lost, miscounted…"></label>
-            <button class="btn btn-ghost">Record adjustment</button>
-            <p class="hint">Can't remove below the <?= qty($shelf['quantity_reserved']) ?> units already reserved.</p>
-        </div>
-    </form>
-
-    <form class="panel" method="post">
-        <div class="panel-head"><h2>Reorder level</h2></div>
-        <div class="panel-body">
-            <?= $hidden('set_reorder') ?>
-            <label>Warn when available is at or below<input type="number" name="reorder_level" min="0" value="<?= $shelf['reorder_level'] ?>" required></label>
-            <button class="btn btn-ghost">Save threshold</button>
-            <p class="hint">The threshold doesn't change stock, so no movement is recorded.</p>
+            <div class="row">
+                <label>How many units?<input type="number" name="quantity" min="1" required inputmode="numeric"></label>
+                <label>Reason<input name="remarks" maxlength="255" required placeholder="e.g. Water damage"></label>
+            </div>
+            <button class="btn btn-ghost">Save correction</button>
+            <?php if ($shelf['quantity_reserved'] > 0): ?><p class="hint">You can't remove the <?= qty($shelf['quantity_reserved']) ?> units already reserved for orders.</p><?php endif; ?>
         </div>
     </form>
 </div>
 
 <section class="panel">
-    <div class="panel-head"><h2>Movement history</h2><span class="result-count"><?= plural(count($recent), 'line') ?></span></div>
+    <div class="panel-head"><h2>History</h2></div>
     <?php require __DIR__ . '/partials/movement_table.php'; ?>
 </section>
 
 <section class="panel">
-    <div class="panel-head"><h2>Reservations on this listing</h2><span class="result-count"><?= plural(count($rows), 'hold') ?></span></div>
+    <div class="panel-head"><h2>Reserved for orders</h2></div>
     <?php require __DIR__ . '/partials/reservation_table.php'; ?>
 </section>
 
 <?php else:
-    $filters = ['q' => trim($_GET['q'] ?? ''), 'status' => $_GET['status'] ?? ''];
-    $rows    = $inventory->stock($filters);
-    $offers  = $inventory->unstockedOffers();
+    $tabs = ['' => 'All', 'low' => 'Running low', 'out' => 'Out of stock', 'off' => 'Not for sale'];
+    $tab  = (string) ($_GET['status'] ?? '');
+    $tab  = isset($tabs[$tab]) ? $tab : '';
+    $all  = $inventory->stock();
+    $in   = fn (string $t) => fn ($r) => match ($t) {
+        'low'   => stock_state($r) === 'low_stock',
+        'out'   => stock_state($r) === 'out_of_stock',
+        'off'   => stock_state($r) === 'not_for_sale',
+        default => true,
+    };
+    $rows   = array_filter($all, $in($tab));
+    $offers = $inventory->unstockedOffers();
 ?>
-<?= page_head('Inventory workspace', 'Stock records',
-    'One record per seller offer. Available is always on hand minus reserved.') ?>
+<?= page_head('', 'Stock', 'Every item you sell, how many are left, and when to restock.') ?>
+
+<section class="equation compact" aria-label="How the numbers work">
+    <div class="term"><small>In warehouse</small><span>units on the shelves</span></div>
+    <div class="op">−</div>
+    <div class="term"><small>Reserved for orders</small><span>promised, not shipped yet</span></div>
+    <div class="op">=</div>
+    <div class="term result"><small>Available to sell</small><span>what customers can still buy</span></div>
+</section>
 
 <section class="panel">
-    <div class="panel-head"><div><h2>All listings</h2><p>Open a record to restock, adjust or see its history.</p></div><span class="result-count"><?= plural(count($rows), 'result') ?></span></div>
-    <form class="toolbar" method="get">
-        <input type="hidden" name="page" value="inventory">
-        <label class="grow">Search<input type="search" name="q" value="<?= h($filters['q']) ?>" placeholder="Product, seller or category"></label>
-        <label>Status
-            <select name="status">
-                <option value="">All statuses</option>
-                <?php foreach (['in_stock', 'low_stock', 'out_of_stock'] as $st): ?>
-                    <option value="<?= $st ?>"<?= selected($filters['status'], $st) ?>><?= label($st) ?></option>
-                <?php endforeach; ?>
-            </select>
-        </label>
-        <button class="btn">Apply</button>
-        <?php if ($filters['q'] || $filters['status']): ?><a class="btn btn-ghost" href="?page=inventory">Reset</a><?php endif; ?>
-    </form>
+    <div class="status-tabs">
+        <?php foreach ($tabs as $key => $text): ?>
+            <a class="status-tab<?= $tab === $key ? ' active' : '' ?>" href="?page=inventory<?= $key !== '' ? "&status=$key" : '' ?>"><?= $text ?> <span><?= count(array_filter($all, $in($key))) ?></span></a>
+        <?php endforeach; ?>
+    </div>
+    <div class="toolbar">
+        <label class="grow search"><?= icon('search') ?><input type="search" data-filter="stock-rows" placeholder="Search by item or seller" aria-label="Search stock"></label>
+    </div>
     <div class="table-wrap">
         <table>
             <thead><tr>
-                <th>Product / seller</th><th>Offer</th>
-                <th class="num">On hand</th><th class="num">Reserved</th><th class="num">Available</th><th class="num">Reorder at</th>
-                <th>Status</th><th>Updated</th>
+                <th>Item</th>
+                <th title="In warehouse minus reserved">Available to sell</th>
+                <th class="num">In warehouse</th>
+                <th class="num">Reserved</th>
+                <th>Status</th><th></th>
             </tr></thead>
-            <tbody>
+            <tbody id="stock-rows">
             <?php foreach ($rows as $r): ?>
-                <tr class="clickable" onclick="location='?page=inventory&id=<?= $r['inventory_id'] ?>'">
-                    <td><a href="?page=inventory&id=<?= $r['inventory_id'] ?>"><strong><?= h($r['product_name']) ?></strong></a>
-                        <small><?= h($r['seller_name']) ?><?= $r['sellable'] ? '' : ' · <span class="neg">not sellable</span>' ?></small></td>
-                    <td><small>#<?= $r['offer_id'] ?> · <?= peso($r['selling_price']) ?></small></td>
+                <tr class="clickable" data-href="?page=inventory&id=<?= $r['inventory_id'] ?>" data-search="<?= h(strtolower($r['product_name'] . ' ' . $r['seller_name'] . ' ' . $r['category_name'])) ?>">
+                    <td><a href="?page=inventory&id=<?= $r['inventory_id'] ?>"><strong><?= h($r['product_name']) ?></strong></a><small><?= h($r['seller_name']) ?></small></td>
+                    <td><span class="level-line"><b><?= qty($r['quantity_available']) ?></b><?= level_bar($r) ?></span><small>Restock at <?= qty($r['reorder_level']) ?></small></td>
                     <td class="num"><?= qty($r['quantity_on_hand']) ?></td>
                     <td class="num"><?= qty($r['quantity_reserved']) ?></td>
-                    <td class="num strong"><?= qty($r['quantity_available']) ?></td>
-                    <td class="num muted"><?= qty($r['reorder_level']) ?></td>
-                    <td><?= badge($r['stock_status']) ?></td>
-                    <td class="date"><small><?= when($r['updated_at']) ?></small></td>
+                    <td><?= badge(stock_state($r)) ?></td>
+                    <td class="right nowrap"><?= add_stock_button($r, 'btn btn-sm btn-ghost') ?></td>
                 </tr>
             <?php endforeach; ?>
-            <?php if (!$rows): ?><tr><td colspan="8" class="empty">No stock records match.</td></tr><?php endif; ?>
+            <tr class="no-match" hidden><td colspan="6" class="empty">No items match your search.</td></tr>
+            <?php if (!$rows): ?><tr><td colspan="6" class="empty">Nothing here.</td></tr><?php endif; ?>
             </tbody>
         </table>
     </div>
 </section>
 
-<form class="panel narrow" method="post">
-    <div class="panel-head"><div><h2>New stock record</h2><p>Start counting a System 1 seller offer.</p></div></div>
-    <div class="panel-body">
+<?php if ($offers): ?>
+<details class="panel narrow fold">
+    <summary><?= icon('plus') ?>Start tracking a new item <span class="muted">(<?= plural(count($offers), 'item') ?> not tracked yet)</span></summary>
+    <form class="panel-body" method="post">
         <?= csrf_field() ?>
         <input type="hidden" name="action" value="create_inventory">
-        <?php if (!$offers): ?>
-            <p class="empty">Every seller offer already has a stock record. Add an offer on the <a href="?page=catalog">Catalogue</a> page first.</p>
-        <?php else: ?>
-            <label>Seller offer
-                <select name="offer_id" required>
-                    <?php foreach ($offers as $o): ?>
-                        <option value="<?= $o['offer_id'] ?>">#<?= $o['offer_id'] ?> · <?= h($o['product_name']) ?> — <?= h($o['seller_name']) ?><?= $o['offer_status'] !== 'active' ? ' (inactive)' : '' ?></option>
-                    <?php endforeach; ?>
-                </select>
-            </label>
-            <div class="row">
-                <label>Initial count<input type="number" name="initial_qty" min="0" value="0"></label>
-                <label>Reorder level<input type="number" name="reorder_level" min="0" value="5"></label>
-            </div>
-            <button class="btn"><?= icon('plus') ?>Create record</button>
-            <p class="hint">A non-zero initial count is logged as a restock movement.</p>
-        <?php endif; ?>
-    </div>
-</form>
+        <label>Item
+            <select name="offer_id" required>
+                <?php foreach ($offers as $o): ?>
+                    <option value="<?= $o['offer_id'] ?>"><?= h($o['product_name']) ?> — <?= h($o['seller_name']) ?><?= $o['offer_status'] !== 'active' ? ' (switched off)' : '' ?></option>
+                <?php endforeach; ?>
+            </select>
+        </label>
+        <div class="row">
+            <label>Units in the warehouse now<input type="number" name="initial_qty" min="0" value="0"></label>
+            <label>Warn me when available drops to<input type="number" name="reorder_level" min="0" value="5"></label>
+        </div>
+        <button class="btn"><?= icon('plus') ?>Start tracking</button>
+    </form>
+</details>
+<?php endif; ?>
 <?php endif; ?>

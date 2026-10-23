@@ -259,3 +259,111 @@ input.qty { width: 84px; min-height: 40px; padding: 7px 10px; text-align: right;
     .row-form { flex-wrap: wrap; }
     .app-footer { padding: 17px 18px 24px; flex-direction: column; gap: 5px; font-size: 11px; }
 }
+
+/* ---------- Motion ----------
+   Short, one-shot transitions. assets/app.js sets the stagger indexes (--i, --r).
+   Everything is skipped when the viewer has asked for reduced motion. */
+@keyframes rise       { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+@keyframes fade       { from { opacity: 0; } to { opacity: 1; } }
+@keyframes slide-down { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: none; } }
+@keyframes pulse      { 0% { box-shadow: 0 0 0 0 currentColor; } 70%, 100% { box-shadow: 0 0 0 5px transparent; } }
+@keyframes spin       { to { transform: rotate(360deg); } }
+
+.btn[aria-busy=true] { cursor: wait; opacity: .85; }
+
+@media (prefers-reduced-motion: no-preference) {
+    .reveal { animation: rise .45s cubic-bezier(.2, .7, .2, 1) both; animation-delay: calc(var(--i, 0) * 70ms); }
+    .stats .stat { animation: rise .45s cubic-bezier(.2, .7, .2, 1) both; animation-delay: calc(var(--i, 0) * 60ms + 90ms); }
+    tbody tr { animation: fade .35s ease both; animation-delay: calc(var(--r, 0) * 30ms + 180ms); }
+    .notice-bar { animation: slide-down .35s cubic-bezier(.2, .7, .2, 1) both; }
+
+    .stat { transition: transform .18s ease, box-shadow .18s ease; }
+    .stat:hover { transform: translateY(-3px); box-shadow: 0 10px 24px #1e3b2b14; }
+    .btn, .btn-ghost { transition: background .12s ease, border-color .12s ease, transform .08s ease; }
+    .btn:active { transform: scale(.97); }
+    .nav-link .icon, .crumb .icon { transition: transform .18s ease; }
+    .nav-link:hover .icon { transform: translateX(2px); }
+    .crumb:hover .icon { transform: translateX(-3px); }
+
+    .badge.out_of_stock .status-dot,
+    .badge.low_stock .status-dot,
+    .badge.active-hold .status-dot { animation: pulse 1.8s ease-out infinite; }
+
+    .btn[aria-busy=true]::after { content: ''; width: 13px; height: 13px; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: spin .7s linear infinite; }
+}
+
+/* ---------- Friendlier controls (stock bars, number strip, pop-up, search) ---------- */
+.nowrap { white-space: nowrap; }
+.badge.not_for_sale { background: #eff1ed; color: #58695b; }
+.badge.active-hold { background: #fcf2d9; color: #85601d; }
+
+/* Stock level bar: fill = available, tick = restock point */
+.level { position: relative; display: inline-block; width: 90px; height: 6px; border-radius: 4px; background: #e6ece1; vertical-align: middle; }
+.level > span { position: absolute; inset: 0 auto 0 0; border-radius: 4px; background: #48A04C; max-width: 100%; }
+.level.low_stock > span { background: #d9a43a; }
+.level.out_of_stock > span { background: #c4533e; }
+.level.not_for_sale > span { background: #a9b5a5; }
+.level > i { position: absolute; top: -3px; bottom: -3px; width: 2px; margin-left: -1px; background: #294b32; border-radius: 1px; opacity: .55; }
+.level-line { display: inline-flex; align-items: center; gap: 12px; }
+.level-line b { min-width: 34px; font-size: 16px; font-variant-numeric: tabular-nums; }
+
+/* "In warehouse − Reserved = Available" strip */
+.equation { display: flex; align-items: stretch; gap: 10px; margin-bottom: 22px; flex-wrap: wrap; }
+.equation .term { flex: 1; min-width: 150px; background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; display: flex; flex-direction: column; gap: 4px; }
+.equation .term small { font-size: 13px; font-weight: 600; color: #596e5a; }
+.equation .term strong { font-size: 30px; line-height: 1.2; letter-spacing: -1px; font-weight: 650; }
+.equation .term span { font-size: 12px; color: #6a7d5e; }
+.equation .term .level { width: 100%; margin-top: 6px; }
+.equation .term.result { background: #edf2e5; border-color: #c7dcbd; }
+.equation .term.result strong, .equation .term.result small { color: var(--green); }
+.equation .op { align-self: center; font-size: 24px; font-weight: 600; color: #8aa085; }
+.equation .restock-point { flex: 1.2; border-style: dashed; }
+.equation.compact .term { padding: 12px 16px; }
+.equation.compact .term small { font-size: 14px; }
+.inline-input { display: flex; gap: 8px; margin-top: 4px; }
+.inline-input input { min-height: 38px; width: 90px; padding: 6px 10px; }
+
+/* Search box with icon */
+.toolbar label.search { position: relative; display: block; }
+.toolbar label.search .icon { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); width: 18px; color: #7b8774; }
+.toolbar label.search input { padding-left: 42px; }
+
+/* Radio choice cards */
+.choice { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 16px; }
+.choice label { display: flex; gap: 10px; align-items: flex-start; margin: 0; padding: 12px 14px; border: 1px solid #c9d5c3; border-radius: 9px; cursor: pointer; font-weight: 400; }
+.choice label:has(input:checked) { border-color: var(--green); background: #f3f7ef; box-shadow: 0 0 0 1px var(--green) inset; }
+.choice input { width: 18px; height: 18px; min-height: 0; margin: 2px 0 0; accent-color: var(--green); flex-shrink: 0; }
+.choice b { display: block; font-size: 14px; }
+.choice small { font-size: 12px; }
+
+/* Empty states */
+.empty-state { display: flex; align-items: center; gap: 12px; padding: 28px 24px; color: var(--muted); }
+.empty-state .icon { width: 36px; height: 36px; padding: 8px; border-radius: 10px; background: #eef3e5; color: #658451; }
+.empty-state p { margin: 0; font-size: 14px; }
+
+/* Collapsible "start tracking" panel */
+details.fold > summary { list-style: none; cursor: pointer; display: flex; align-items: center; gap: 10px; padding: 16px 22px; font-weight: 600; color: var(--green); }
+details.fold > summary::-webkit-details-marker { display: none; }
+details.fold[open] > summary { border-bottom: 1px solid var(--line); }
+details.fold > summary .muted { font-weight: 400; font-size: 13px; }
+
+/* Pop-up (System 2's dialog style) */
+dialog { border: 1px solid #d4dfc9; border-radius: 14px; padding: 26px; width: calc(100% - 36px); max-width: 460px; box-shadow: 0 24px 90px #0b2d2550; color: var(--ink); }
+dialog::backdrop { background: #122e2466; }
+.dialog-head { display: flex; gap: 14px; align-items: flex-start; margin-bottom: 20px; }
+.dialog-head h2 { margin: 0; }
+.dialog-head p { margin: 2px 0 0; font-size: 13px; }
+.dialog-icon { width: 40px; height: 40px; border-radius: 12px; background: #eaf1e5; color: var(--green); display: grid; place-items: center; flex-shrink: 0; }
+.dialog-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 6px; }
+
+@media (prefers-reduced-motion: no-preference) {
+    dialog[open] { animation: rise .25s cubic-bezier(.2, .7, .2, 1); }
+    dialog[open]::backdrop { animation: fade .25s ease; }
+    .level > span { transition: width .6s cubic-bezier(.2, .7, .2, 1); }
+}
+
+@media (max-width: 780px) {
+    .equation .op { display: none; }
+    .equation .term { min-width: calc(50% - 5px); }
+    .choice { grid-template-columns: 1fr; }
+}

@@ -12,23 +12,29 @@ function handle_action(InventoryService $inv, PDO $db, string $action, array $p)
     switch ($action) {
         // ---- Inventory ----
         case 'create_inventory':
-            $id = $inv->createInventory(int_in($p, 'offer_id'), int_in($p, 'reorder_level'), int_in($p, 'initial_qty'));
-            flash('success', "Inventory record #$id created.");
+            $id   = $inv->createInventory(int_in($p, 'offer_id'), int_in($p, 'reorder_level'), int_in($p, 'initial_qty'));
+            $item = $inv->find($id);
+            flash('success', "Now tracking {$item['product_name']} from {$item['seller_name']}.");
             break;
 
         case 'restock':
-            $inv->restock(int_in($p, 'inventory_id'), int_in($p, 'quantity'), $p['remarks'] ?? null);
-            flash('success', 'Restocked ' . qty(int_in($p, 'quantity')) . ' units.');
+            $n = int_in($p, 'quantity');
+            $inv->restock(int_in($p, 'inventory_id'), $n, $p['remarks'] ?? null);
+            $item = $inv->find(int_in($p, 'inventory_id'));
+            flash('success', 'Added ' . plural($n, 'unit') . " of {$item['product_name']}. {$item['quantity_available']} now available to sell.");
             break;
 
         case 'adjust':
-            $inv->adjust(int_in($p, 'inventory_id'), (string) ($p['direction'] ?? ''), int_in($p, 'quantity'), (string) ($p['remarks'] ?? ''));
-            flash('success', 'Adjustment recorded.');
+            $n = int_in($p, 'quantity');
+            $inv->adjust(int_in($p, 'inventory_id'), (string) ($p['direction'] ?? ''), $n, (string) ($p['remarks'] ?? ''));
+            $item = $inv->find(int_in($p, 'inventory_id'));
+            flash('success', 'Count fixed: ' . (($p['direction'] ?? '') === 'in' ? 'added ' : 'removed ') . plural($n, 'unit')
+                . ". {$item['quantity_on_hand']} now in the warehouse.");
             break;
 
         case 'set_reorder':
             $inv->setReorderLevel(int_in($p, 'inventory_id'), int_in($p, 'reorder_level'));
-            flash('success', 'Reorder level updated.');
+            flash('success', "You'll be warned when available stock drops to " . int_in($p, 'reorder_level') . '.');
             break;
 
         // ---- Order simulator (System 2 → 4 → 5 workflow) ----

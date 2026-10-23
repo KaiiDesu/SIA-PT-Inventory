@@ -411,11 +411,11 @@ class InventoryService
         ?string $remarks = null
     ): int {
         if ($qty <= 0) {
-            throw new InventoryException('Quantity must be greater than 0.');
+            throw new InventoryException('Enter a number of units greater than 0.');
         }
         $remarks = $remarks !== null && trim($remarks) !== '' ? trim($remarks) : null;
         if (str_starts_with($type, 'adjustment_') && $remarks === null) {
-            throw new InventoryException('Adjustments need remarks explaining why (damaged, lost, miscounted…).');
+            throw new InventoryException('Please give a reason for fixing the count, e.g. damaged, lost or miscounted.');
         }
 
         $shelf    = $this->requireShelf($inventoryId, lock: true);
@@ -423,11 +423,12 @@ class InventoryService
         $reserved = $shelf['quantity_reserved'] - ($type === 'sale' ? $qty : 0);
 
         if ($onHand < 0) {
-            throw new InventoryException("Only {$shelf['quantity_on_hand']} on hand; cannot remove $qty.");
+            throw new InventoryException("There are only {$shelf['quantity_on_hand']} in the warehouse, so $qty can't be removed.");
         }
         if ($onHand < $reserved) {
+            $free = $shelf['quantity_on_hand'] - $shelf['quantity_reserved'];
             throw new InventoryException(
-                "That would leave $onHand on hand while $reserved are reserved for orders. Release or ship those orders first."
+                "You can remove at most $free: the other $reserved units are reserved for customers' orders that haven't shipped yet."
             );
         }
 

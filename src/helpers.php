@@ -24,9 +24,63 @@ function redirect(string $url): never
     exit;
 }
 
+/** Everyday names for the statuses and movement types stored in the database. */
 function label(string $value): string
 {
-    return ucfirst(str_replace('_', ' ', $value));
+    static $names = [
+        // Stock levels
+        'in_stock'             => 'In stock',
+        'low_stock'            => 'Running low',
+        'out_of_stock'         => 'Out of stock',
+        'not_for_sale'         => 'Not for sale',
+        // Reservations
+        'fulfilled'            => 'Shipped',
+        'released'             => 'Released',
+        // Stock history
+        'restock'              => 'Stock added',
+        'sale'                 => 'Shipped to customer',
+        'return'               => 'Returned',
+        'adjustment_in'        => 'Count fixed (+)',
+        'adjustment_out'       => 'Count fixed (−)',
+        // System 2 order statuses
+        'pending_stock'        => 'Checking stock',
+        'awaiting_payment'     => 'Awaiting payment',
+        'confirmed'            => 'Paid',
+        'fulfilling'           => 'Out for delivery',
+        'completed'            => 'Delivered',
+        'cancellation_pending' => 'Cancelling',
+    ];
+    return $names[$value] ?? ucfirst(str_replace('_', ' ', $value));
+}
+
+/** The status a person cares about: a listing that can't be ordered is "Not for sale", whatever its count. */
+function stock_state(array $row): string
+{
+    return $row['sellable'] ? $row['stock_status'] : 'not_for_sale';
+}
+
+/** A small fill bar for available stock, with a tick at the restock point. */
+function level_bar(array $row): string
+{
+    $available = max(0, (int) $row['quantity_available']);
+    $reorder   = (int) $row['reorder_level'];
+    $scale     = max($reorder * 3, $available, 1);
+    $tick      = $reorder > 0 ? '<i style="left:' . round(100 * $reorder / $scale) . '%"></i>' : '';
+    return '<span class="level ' . h(stock_state($row)) . '" title="Restock point: ' . $reorder . '">'
+         . '<span style="width:' . round(100 * $available / $scale) . '%"></span>' . $tick . '</span>';
+}
+
+/** Opens the shared "Add stock" pop-up (views/partials/add_stock_dialog.php) for one item. */
+function add_stock_button(array $row, string $class = 'btn btn-sm'): string
+{
+    return '<button type="button" class="' . $class . '" data-add-stock="' . (int) $row['inventory_id'] . '" data-name="'
+         . h($row['product_name'] . ' · ' . $row['seller_name']) . '">' . icon('plus') . 'Add stock</button>';
+}
+
+/** The current URL's query, so a form can send the user back to exactly where they were. */
+function here(): string
+{
+    return '?' . ($_SERVER['QUERY_STRING'] ?? '');
 }
 
 /** Status pill in System 2's style: a coloured badge with a leading dot. */
@@ -63,10 +117,11 @@ function icon(string $name, string $class = ''): string
          . ' stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="' . ($paths[$name] ?? $paths['box']) . '"/></svg>';
 }
 
-/** The dark-green page banner System 2 puts at the top of every screen. */
+/** The dark-green page banner System 2 puts at the top of every screen. The eyebrow line is optional. */
 function page_head(string $eyebrow, string $title, string $intro, string $aside = ''): string
 {
-    return '<header class="page-head"><div><div class="eyebrow">' . h(strtoupper($eyebrow)) . '</div><h1>' . h($title)
+    $eyebrow = $eyebrow !== '' ? '<div class="eyebrow">' . h(strtoupper($eyebrow)) . '</div>' : '';
+    return '<header class="page-head"><div>' . $eyebrow . '<h1>' . h($title)
          . '</h1><p>' . h($intro) . '</p></div>' . $aside . '</header>';
 }
 

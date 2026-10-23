@@ -1,54 +1,50 @@
 <?php
 $s      = $inventory->summary();
-$alerts = $inventory->lowStock();
-$recent = $inventory->movements([], 8);
-$rows   = $inventory->reservations(['status' => 'active'], 6);
+$alerts = array_filter($inventory->lowStock(), fn ($r) => $r['sellable']);
+$recent = $inventory->movements([], 6);
+$rows   = $inventory->reservations(['status' => 'active'], 5);
+$need   = count($alerts);
 ?>
-<?= page_head('Inventory workspace', 'Inventory overview',
-    "How many units of each seller's product can still be sold right now.",
-    '<a class="btn" href="?page=inventory">' . icon('box') . 'Stock records</a>') ?>
+<?= page_head('', 'Dashboard', "Today's stock at a glance, and what needs your attention.") ?>
 
 <div class="overview">
     <section class="stats">
-        <div class="stat"><small>Units on hand</small><strong><?= qty($s['on_hand']) ?></strong><span class="sub">Across <?= qty($s['listings']) ?> listings</span><span class="stat-icon"><?= icon('box') ?></span></div>
-        <div class="stat"><small>Reserved for orders</small><strong><?= qty($s['reserved']) ?></strong><span class="sub"><?= qty($s['active_holds']) ?> active holds</span><span class="stat-icon"><?= icon('clock') ?></span></div>
-        <div class="stat feature"><small>Available to sell</small><strong><?= qty($s['available']) ?></strong><span class="sub"><?= peso($s['available_value']) ?> at selling price</span><span class="stat-icon"><?= icon('check') ?></span></div>
-        <div class="stat <?= $s['out_of_stock'] ? 'bad' : ($s['low_stock'] ? 'warn' : '') ?>"><small>Need restocking</small><strong><?= qty($s['low_stock'] + $s['out_of_stock']) ?></strong><span class="sub"><?= qty($s['low_stock']) ?> low · <?= qty($s['out_of_stock']) ?> out of stock</span><span class="stat-icon"><?= icon('alert') ?></span></div>
+        <div class="stat feature"><small>Available to sell</small><strong><?= qty($s['available']) ?></strong><span class="sub">units customers can still order</span><span class="stat-icon"><?= icon('check') ?></span></div>
+        <div class="stat"><small>In warehouse</small><strong><?= qty($s['on_hand']) ?></strong><span class="sub">units physically on the shelves</span><span class="stat-icon"><?= icon('box') ?></span></div>
+        <div class="stat"><small>Reserved for orders</small><strong><?= qty($s['reserved']) ?></strong><span class="sub">units waiting to ship</span><span class="stat-icon"><?= icon('clock') ?></span></div>
+        <div class="stat <?= $need ? 'warn' : '' ?>"><small>Need restocking</small><strong><?= $need ?></strong><span class="sub"><?= $need ? 'items running low or out' : 'everything is well stocked' ?></span><span class="stat-icon"><?= icon('alert') ?></span></div>
     </section>
-    <p class="scope-note">Available is always on hand minus reserved — it is calculated, never stored. A listing is low when available is at or below its reorder level.</p>
-
-    <div class="grid-2">
-        <section class="panel">
-            <div class="panel-head"><h2>Needs restocking</h2><small>Lowest available first</small></div>
-            <?php if (!$alerts): ?>
-                <p class="empty">Every listing is above its reorder level.</p>
-            <?php else: ?>
-                <div class="table-wrap">
-                    <table>
-                        <thead><tr><th>Listing</th><th class="num">Available</th><th class="num">Reorder at</th><th>Status</th></tr></thead>
-                        <tbody>
-                        <?php foreach ($alerts as $r): ?>
-                            <tr>
-                                <td><a href="?page=inventory&id=<?= $r['inventory_id'] ?>"><?= h($r['product_name']) ?></a><small><?= h($r['seller_name']) ?> · Offer #<?= $r['offer_id'] ?></small></td>
-                                <td class="num strong"><?= qty($r['quantity_available']) ?></td>
-                                <td class="num"><?= qty($r['reorder_level']) ?></td>
-                                <td><?= badge($r['stock_status']) ?></td>
-                            </tr>
-                        <?php endforeach; ?>
-                        </tbody>
-                    </table>
-                </div>
-            <?php endif; ?>
-        </section>
-
-        <section class="panel">
-            <div class="panel-head"><h2>Active holds</h2><a class="more" href="?page=reservations&status=active">View all</a></div>
-            <?php $compact = true; require __DIR__ . '/partials/reservation_table.php'; ?>
-        </section>
-    </div>
 
     <section class="panel">
-        <div class="panel-head"><h2>Recent stock movements</h2><a class="more" href="?page=movements">Full ledger</a></div>
-        <?php require __DIR__ . '/partials/movement_table.php'; ?>
+        <div class="panel-head"><h2>Needs restocking</h2><a class="more" href="?page=inventory&status=low">See all stock</a></div>
+        <?php if (!$alerts): ?>
+            <div class="empty-state"><?= icon('check') ?><p><b>All good.</b> Every item is above its restock point.</p></div>
+        <?php else: ?>
+            <div class="table-wrap">
+                <table>
+                    <thead><tr><th>Item</th><th>Available to sell</th><th>Status</th><th></th></tr></thead>
+                    <tbody>
+                    <?php foreach ($alerts as $r): ?>
+                        <tr>
+                            <td><a href="?page=inventory&id=<?= $r['inventory_id'] ?>"><strong><?= h($r['product_name']) ?></strong></a><small><?= h($r['seller_name']) ?></small></td>
+                            <td><span class="level-line"><b><?= qty($r['quantity_available']) ?></b><?= level_bar($r) ?></span><small>Restock when it reaches <?= qty($r['reorder_level']) ?></small></td>
+                            <td><?= badge(stock_state($r)) ?></td>
+                            <td class="right"><?= add_stock_button($r) ?></td>
+                        </tr>
+                    <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+        <?php endif; ?>
+    </section>
+
+    <section class="panel">
+        <div class="panel-head"><h2>Waiting to ship</h2><a class="more" href="?page=reservations">All reserved stock</a></div>
+        <?php require __DIR__ . '/partials/reservation_table.php'; ?>
+    </section>
+
+    <section class="panel">
+        <div class="panel-head"><h2>Recent activity</h2><a class="more" href="?page=movements">Full history</a></div>
+        <?php $compact = true; require __DIR__ . '/partials/movement_table.php'; ?>
     </section>
 </div>

@@ -1,38 +1,28 @@
 <?php
-$filters = [
-    'type'         => $_GET['type'] ?? '',
-    'order_id'     => $_GET['order_id'] ?? '',
-    'inventory_id' => $_GET['inventory_id'] ?? '',
+$groups = [
+    ''         => ['All',            []],
+    'added'    => ['Stock added',    ['restock']],
+    'shipped'  => ['Shipped',        ['sale']],
+    'returned' => ['Returned',       ['return']],
+    'fixed'    => ['Count fixes',    ['adjustment_in', 'adjustment_out']],
 ];
-$recent   = $inventory->movements($filters);
-$listings = $inventory->stock();
+$tab    = (string) ($_GET['type'] ?? '');
+$tab    = isset($groups[$tab]) ? $tab : '';
+$all    = $inventory->movements([], 1000);
+$recent = $groups[$tab][1] ? array_values(array_filter($all, fn ($m) => in_array($m['movement_type'], $groups[$tab][1], true))) : $all;
 ?>
-<?= page_head('Inventory workspace', 'Stock ledger',
-    'Every change to on-hand stock, newest first. Lines are permanent — mistakes are fixed with a new adjustment.') ?>
+<?= page_head('', 'Stock history',
+    'Every time stock went in or out, newest first. Entries can’t be edited — to correct a mistake, use “Fix the count” on the item.') ?>
 
 <section class="panel">
-    <div class="panel-head"><div><h2>Movements</h2><p>Restocks, sales, returns and adjustments.</p></div><span class="result-count"><?= plural(count($recent), 'result') ?></span></div>
-    <form class="toolbar" method="get">
-        <input type="hidden" name="page" value="movements">
-        <label class="grow">Listing
-            <select name="inventory_id">
-                <option value="">All listings</option>
-                <?php foreach ($listings as $l): ?>
-                    <option value="<?= $l['inventory_id'] ?>"<?= selected($filters['inventory_id'], $l['inventory_id']) ?>><?= h($l['product_name']) ?> — <?= h($l['seller_name']) ?></option>
-                <?php endforeach; ?>
-            </select>
-        </label>
-        <label>Type
-            <select name="type">
-                <option value="">All types</option>
-                <?php foreach (InventoryService::MOVEMENT_TYPES as $t): ?>
-                    <option value="<?= $t ?>"<?= selected($filters['type'], $t) ?>><?= label($t) ?></option>
-                <?php endforeach; ?>
-            </select>
-        </label>
-        <label>Order ID<input type="number" name="order_id" min="1" value="<?= h($filters['order_id']) ?>" placeholder="Any"></label>
-        <button class="btn">Apply</button>
-        <?php if (array_filter($filters)): ?><a class="btn btn-ghost" href="?page=movements">Reset</a><?php endif; ?>
-    </form>
-    <?php require __DIR__ . '/partials/movement_table.php'; ?>
+    <div class="status-tabs">
+        <?php foreach ($groups as $key => [$text, $types]): ?>
+            <a class="status-tab<?= $tab === $key ? ' active' : '' ?>" href="?page=movements<?= $key !== '' ? "&type=$key" : '' ?>"><?= $text ?>
+                <span><?= $types ? count(array_filter($all, fn ($m) => in_array($m['movement_type'], $types, true))) : count($all) ?></span></a>
+        <?php endforeach; ?>
+    </div>
+    <div class="toolbar">
+        <label class="grow search"><?= icon('search') ?><input type="search" data-filter="history-rows" placeholder="Search by item, seller, order or note" aria-label="Search stock history"></label>
+    </div>
+    <div id="history-rows"><?php require __DIR__ . '/partials/movement_table.php'; ?></div>
 </section>

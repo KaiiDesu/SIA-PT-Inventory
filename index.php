@@ -5,17 +5,17 @@ session_start();
 require __DIR__ . '/src/bootstrap.php';
 
 $pages = [
-    'dashboard'    => ['Inventory overview', 'chart',    'inventory'],
-    'inventory'    => ['Stock records',      'box',      'inventory'],
-    'reservations' => ['Reservations',       'clock',    'inventory'],
-    'movements'    => ['Stock ledger',       'ledger',   'inventory'],
+    'dashboard'    => ['Dashboard',          'chart',    'inventory'],
+    'inventory'    => ['Stock',              'box',      'inventory'],
+    'reservations' => ['Reserved stock',     'clock',    'inventory'],
+    'movements'    => ['Stock history',      'ledger',   'inventory'],
     'orders'       => ['Order simulator',    'settings', 'demo'],
     'catalog'      => ['Catalogue',          'tag',      'demo'],
 ];
 $page = isset($pages[$_GET['page'] ?? '']) ? $_GET['page'] : 'dashboard';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $back = $_POST['back'] ?? "?page=$page";
+    $back = $_POST['back'] ?? here();
     if (!hash_equals(csrf_token(), (string) ($_POST['csrf'] ?? ''))) {
         flash('error', 'Your session expired. Please try again.');
         redirect($back);

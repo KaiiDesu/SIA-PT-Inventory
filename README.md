@@ -13,13 +13,17 @@ It is built to sit beside **System 2 (BSIT-44 Sales-Order Management)**:
 ## Setup (XAMPP)
 
 1. Copy the `inventory-system` folder into `C:\xampp\htdocs\`.
-2. In `config.php`, set your MySQL user, password and database name.
+2. Create `config.local.php` next to `config.php` with your MySQL settings. It is ignored by Git, so your password never gets uploaded:
+   ```php
+   <?php return ['db' => ['pass' => 'your-mysql-password']];
+   ```
+   You can also set `user`, `name` (database), `host` and `port` there. Leave out anything that matches the defaults in `config.php`.
 3. Create the tables. Pick one:
 
 | Situation | Command |
 |---|---|
-| **Standalone** (testing Inventory alone) | `C:\xampp\php\php.exe database\install.php`<br>Loads System 1 & 2's tables, Inventory's tables and sample data into the database in `config.php`. Refuses to run if that database holds anything else. |
-| **Shared** (System 2 already set up `mini_erp`) | Set the database name to `mini_erp` in `config.php`, then run `C:\xampp\php\php.exe database\install.php --shared`<br>Adds only Inventory's 3 tables and view. Never touches Catalogue or Sales data. If they already exist it refuses, unless you add `--reset`. |
+| **Standalone** (testing Inventory alone) | `C:\xampp\php\php.exe database\install.php`<br>Loads System 1 & 2's tables, Inventory's tables and sample data into the database set in `config.local.php` (default `sia_inventory`). Refuses to run if that database holds anything else. |
+| **Shared** (System 2 already set up `mini_erp`) | Set `'name' => 'mini_erp'` in `config.local.php`, then run `C:\xampp\php\php.exe database\install.php --shared`<br>Adds only Inventory's 3 tables and view. Never touches Catalogue or Sales data. If they already exist it refuses, unless you add `--reset`. |
 
 4. Start Apache and MySQL, then open <http://localhost/inventory-system/>.
 
